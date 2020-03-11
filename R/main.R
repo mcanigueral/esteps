@@ -5,6 +5,7 @@
 #'
 #' @param historical_consumption A dataframe with datetime and consumption columns
 #' @param device_power A number corresponding to device constant power
+#' @param at_least Minimum of minutes to consider the step
 #'
 #' @return A dataframe of events record, composed by:
 #'     activation datetime
@@ -14,7 +15,7 @@
 #' @export
 #' @import dplyr
 #'
-steps_record <- function(historical_consumption, device_power) {
+steps_record <- function(historical_consumption, device_power, at_least) {
   steps <- get_steps(historical_consumption, device_power)
   activation <- steps$datetime[steps$activation]
   deactivation <- steps$datetime[steps$deactivation]
@@ -30,9 +31,9 @@ steps_record <- function(historical_consumption, device_power) {
     mutate(consumption = purrr::map2(activation, deactivation, function(x, y) {
       sum(steps$consumption[(steps$datetime > x) & (steps$datetime < y)])
     })) %>%
-    mutate(duration = as.numeric(difftime(deactivation, activation, units='hour')),
+    mutate(duration = as.numeric(difftime(deactivation, activation, units='mins')),
            consumed = device_power*duration) %>%
-    filter(duration > 1) # At least 1 hour of consumption
+    filter(duration > at_least)
 }
 
 
@@ -47,14 +48,14 @@ average_consumption <- function(steps_record) {
 }
 
 
-#' Average duration (hours) of device activation period
+#' Average duration (minutes) of device activation period
 #'
 #' @param steps_record A dataframe of events record
 #'
-#' @return A value. Duration (hours).
+#' @return Mean of duration values (minutes).
 #'
 average_duration <- function(steps_record) {
-  stats::median(unlist(steps_record$duration))
+  mean(unlist(steps_record$duration))
 }
 
 
@@ -165,7 +166,7 @@ start_time_histogram <- function(user_name, steps_record) {
 #' @export
 #'
 session_duration_histogram <- function(user_name, steps_record) {
-  duration_df <- data.frame(duration = steps_record$duration)
+  duration_df <- data.frame(duration = steps_record$duration/60)
   ggplot2::qplot(duration,
                  data = duration_df,
                  main=paste("Counts of sessions duration for", user_name, sep=" "),
